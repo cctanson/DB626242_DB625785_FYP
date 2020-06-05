@@ -1,0 +1,127 @@
+#define VEH_MOVING_LIMIT 3
+#define TRUE 1
+#define FALSE 0
+
+typedef enum
+{
+	WORKING,
+	NO_FLOW,
+	SHORT_CIRCUIT,
+} SENSOR_status;
+
+typedef struct
+{
+	int wheel_speed;
+	int parking_brake;
+	int prim_low_flow;
+	int prim_high_volt;
+	int second_circ_handles_stee;
+	int elec_motor_act;
+} VEHICLE_INFO;
+
+typedef enum
+{
+	PARKING_BRAKE_APPLIED,
+	PRIMARY_CIRCUIT_LOW_FLOW,
+	PRIMARY_CIRCUIT_HIGH_VOLTAGE,
+	WHEEL_BASED_SPEED,
+	SECONDARY_CIRCUIT_HANDLES_STEERING,
+	ELECTRIC_MOTOR_ACTIVATED,
+	NUM_SIGNALS
+} SIGNAL;
+
+int status[NUM_SIGNALS];
+/*Reads the specific signal from the status.*/
+
+int read(SIGNAL i)
+{
+	if(i < NUM_SIGNALS)
+	{
+		return status[i];
+	}
+}
+
+/*Writes the specific signal to the status.*/
+
+void write(SIGNAL i, int value)
+{
+	if(i < NUM_SIGNALS)
+	{
+	status[i] = value;
+	}
+}
+/*Get the current status of the system.*/
+void get_system_status(VEHICLE_INFO *veh_info)
+{
+	veh_info->wheel_speed = read(WHEEL_BASED_SPEED);
+	veh_info->parking_brake = read(PARKING_BRAKE_APPLIED);
+	veh_info->prim_low_flow = read(PRIMARY_CIRCUIT_LOW_FLOW);
+	veh_info->prim_high_volt = read(PRIMARY_CIRCUIT_HIGH_VOLTAGE);
+	veh_info->second_circ_handles_stee = 	read(SECONDARY_CIRCUIT_HANDLES_STEERING);
+	veh_info->elec_motor_act = read(ELECTRIC_MOTOR_ACTIVATED);
+}
+/*Check the status of the primary steering circuit sensors.*/
+void check_prim_sensor_status(VEHICLE_INFO *veh_info, SENSOR_status *sensor_status)
+{
+	if(veh_info->prim_high_volt == TRUE)
+	{
+		*sensor_status = SHORT_CIRCUIT;
+	}
+	else if(veh_info->prim_low_flow == TRUE)
+	{
+		*sensor_status = NO_FLOW;
+	}
+	else
+	{
+	*sensor_status = WORKING;
+	}
+}
+/*Check if the secondary circult need to handle the steering. */
+void secondary_steering(VEHICLE_INFO *veh_info,SENSOR_status *sensor_status)
+{
+	char vehicleIsMoving;
+	char vehicleIsMovingWithoutPrimaryPowerSteering;
+
+	// Check whether the vehicle is moving.
+	if(veh_info->wheel_speed > VEH_MOVING_LIMIT)
+	{
+		vehicleIsMoving = TRUE;
+	}
+	else
+	{
+	vehicleIsMoving = FALSE;
+	}
+
+	// Check whether vehicle is moving without primary power steering.
+	if(vehicleIsMoving == TRUE && (*sensor_status == NO_FLOW || *sensor_status == SHORT_CIRCUIT))
+	{
+		vehicleIsMovingWithoutPrimaryPowerSteering = TRUE;
+	}
+	else
+	{
+		vehicleIsMovingWithoutPrimaryPowerSteering = FALSE;
+	}
+	
+	// Let secondary circuit handle steering if necessary.
+	if(vehicleIsMovingWithoutPrimaryPowerSteering == TRUE)
+	{
+		veh_info->second_circ_handles_stee = TRUE;
+	}
+
+	// Activate the electric motor.
+	if(veh_info->second_circ_handles_stee==TRUE&& veh_info->parking_brake == FALSE)
+	{
+		veh_info->elec_motor_act = TRUE;
+	}
+}
+/*Entry point of steering module.*/
+void steering()
+{
+	VEHICLE_INFO veh_info;
+	SENSOR_status prim_sensor;
+	get_system_status(&veh_info);
+	check_prim_sensor_status(&veh_info, &prim_sensor);
+	secondary_steering(&veh_info, &prim_sensor);
+	write(SECONDARY_CIRCUIT_HANDLES_STEERING,veh_info.second_ci	rc_handles_stee);
+	write(ELECTRIC_MOTOR_ACTIVATED, veh_info.elec_motor_act);
+}
